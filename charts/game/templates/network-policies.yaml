@@ -1,0 +1,29 @@
+# Tout est fermé par défaut, entrées comme sorties ; seul Traefik joint les
+# pods. (Une NetworkPolicy ne filtre pas le nœud lui-même, P-26.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-traefik
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/instance: {{ .Release.Name }} }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ .Values.traefik.namespace }} }
+      ports:
+        - { port: 7425 }
+        - { port: 8080 }

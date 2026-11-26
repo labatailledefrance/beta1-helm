@@ -1,0 +1,52 @@
+# Serveur de simulation : un monde = un processus, une seule réplique (H-01).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: server
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+    app.kubernetes.io/name: server
+spec:
+  replicas: 1
+  serviceName: server
+  selector:
+    matchLabels: { app.kubernetes.io/name: server, app.kubernetes.io/instance: {{ .Release.Name }} }
+  template:
+    metadata:
+      labels:
+        {{- include "game.labels" . | nindent 8 }}
+        app.kubernetes.io/name: server
+    spec:
+      {{- include "game.podSecurity" . | nindent 6 }}
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: server
+          image: {{ include "game.image" .Values.server }}
+          args: ["--listen", "0.0.0.0:7425", "--threads", {{ .Values.server.threads | quote }}]
+          ports:
+            - { name: ws, containerPort: 7425 }
+          {{- include "game.containerSecurity" . | nindent 10 }}
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}
+          startupProbe: { tcpSocket: { port: ws }, periodSeconds: 5, failureThreshold: 120 }
+          readinessProbe: { tcpSocket: { port: ws }, periodSeconds: 10 }
+          livenessProbe: { tcpSocket: { port: ws }, periodSeconds: 20 }
+          volumeMounts:
+            - { name: state, mountPath: /state }
+  volumeClaimTemplates:
+    - metadata: { name: state }
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ .Values.server.persistence.storageClass }}
+        resources: { requests: { storage: {{ .Values.server.persistence.size }} } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: server, app.kubernetes.io/instance: {{ .Release.Name }} }
+  ports:
+    - { name: ws, port: 7425, targetPort: ws }

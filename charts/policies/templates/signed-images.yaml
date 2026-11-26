@@ -1,0 +1,53 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: game-signed-images
+  labels:
+    app.kubernetes.io/part-of: la-bataille-de-france
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    policies.kyverno.io/title: Images du jeu signées
+    policies.kyverno.io/description: >-
+      Dans le namespace du jeu, un pod n'est admis que si toutes ses images
+      viennent de l'organisation, par digest, et portent une signature cosign
+      émise par le workflow image.yml de labatailledefrance/.github.
+spec:
+  background: false
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: origin-and-digest
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: {{ toJson .Values.namespaces }}
+      validate:
+        failureAction: Enforce
+        message: "Images admises : {{ .Values.images.pattern }}@sha256:…"
+        foreach:
+          - list: "request.object.spec.[containers, initContainers, ephemeralContainers][]"
+            pattern:
+              image: "{{ .Values.images.pattern }}@sha256:*"
+    - name: signature
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: {{ toJson .Values.namespaces }}
+      verifyImages:
+        - imageReferences: [{{ .Values.images.pattern | quote }}]
+          failureAction: Enforce
+          mutateDigest: false
+          verifyDigest: true
+          required: true
+          {{- with .Values.images.registryCredentials }}
+          imageRegistryCredentials:
+            secrets: [{{ . | quote }}]
+          {{- end }}
+          attestors:
+            - entries:
+                - keyless:
+                    issuer: {{ .Values.images.issuer | quote }}
+                    subjectRegExp: {{ .Values.images.subject | quote }}
+                    rekor:
+                      url: {{ .Values.images.rekor | quote }}

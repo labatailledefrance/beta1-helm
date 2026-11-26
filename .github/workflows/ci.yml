@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions: {}
+
+jobs:
+  # Vérifie les charts ; sur main et les tags, les publie en OCI et les signe.
+  chart:
+    uses: labatailledefrance/.github/.github/workflows/chart.yml@2a2b9d8e0fd4a253d281d83127b4f4f67c20880d # v2.0.0
+    with:
+      directory: charts
+      publish: ${{ github.event_name == 'push' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+  securite:
+    uses: labatailledefrance/.github/.github/workflows/securite.yml@2a2b9d8e0fd4a253d281d83127b4f4f67c20880d # v2.0.0
+    permissions:
+      contents: read
+  dco:
+    if: github.event_name == 'pull_request'
+    uses: labatailledefrance/.github/.github/workflows/dco.yml@2a2b9d8e0fd4a253d281d83127b4f4f67c20880d # v2.0.0
+    permissions:
+      contents: read

@@ -1,0 +1,39 @@
+# Nom d'hôte public du jeu.
+host: srv.labatailledefrance.fr
+
+server:
+  image:
+    repository: ghcr.io/labatailledefrance/beta1-server
+    # Digest obligatoire (sha256:…) : jamais de tag mobile.
+    digest: ""
+  threads: 16
+  resources:
+    requests: { cpu: "2", memory: 1Gi }
+    limits: { cpu: "16", memory: 8Gi }
+  # État persistant de la simulation (snapshots, A-13).
+  persistence:
+    size: 20Gi
+    storageClass: local-path
+
+client:
+  image:
+    repository: ghcr.io/labatailledefrance/beta1-client
+    digest: ""
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: "1", memory: 256Mi }
+
+# Secret dockerconfigjson pour ghcr.io, tant que les images sont privées.
+imagePullSecret: ""
+
+traefik:
+  entryPoint: websecure
+  certResolver: letsencrypt
+  # Namespace de Traefik : seul autorisé à joindre les pods (NetworkPolicy).
+  namespace: traefik
+  # Rate limits par adresse IP (H-01, H-02) : requêtes par seconde, burst, connexions simultanées.
+  rateLimit:
+    average: 50
+    burst: 100
+    inFlight: 10

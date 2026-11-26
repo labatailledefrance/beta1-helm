@@ -1,0 +1,49 @@
+# Client : fichiers statiques (wasm, page) servis par nginx, non root.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+    app.kubernetes.io/name: client
+spec:
+  replicas: {{ .Values.client.replicas }}
+  selector:
+    matchLabels: { app.kubernetes.io/name: client, app.kubernetes.io/instance: {{ .Release.Name }} }
+  template:
+    metadata:
+      labels:
+        {{- include "game.labels" . | nindent 8 }}
+        app.kubernetes.io/name: client
+    spec:
+      {{- include "game.podSecurity" . | nindent 6 }}
+      containers:
+        - name: nginx
+          image: {{ include "game.image" .Values.client }}
+          ports:
+            - { name: http, containerPort: 8080 }
+          {{- include "game.containerSecurity" . | nindent 10 }}
+          resources:
+            {{- toYaml .Values.client.resources | nindent 12 }}
+          readinessProbe: { httpGet: { path: /, port: http }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /, port: http }, periodSeconds: 20 }
+          # Racine en lecture seule : nginx n'écrit que dans ces volumes.
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: cache, mountPath: /var/cache/nginx }
+            - { name: pid, mountPath: /run/nginx }
+      volumes:
+        - { name: tmp, emptyDir: { sizeLimit: 64Mi } }
+        - { name: cache, emptyDir: { sizeLimit: 256Mi } }
+        - { name: pid, emptyDir: { medium: Memory, sizeLimit: 1Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: client
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: client, app.kubernetes.io/instance: {{ .Release.Name }} }
+  ports:
+    - { name: http, port: 8080, targetPort: http }

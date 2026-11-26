@@ -1,0 +1,12 @@
+# Namespaces où les politiques s'appliquent.
+namespaces: [labatailledefrance]
+
+images:
+  # Seules images admises (pattern Kyverno) ; le digest est obligatoire.
+  pattern: "ghcr.io/labatailledefrance/*"
+  # Identité de la signature : le workflow réutilisable qui construit les images.
+  issuer: https://token.actions.githubusercontent.com
+  subject: '^https://github\.com/labatailledefrance/\.github/\.github/workflows/image\.yml@.+$'
+  rekor: https://rekor.sigstore.dev
+  # Secret (dans le namespace de Kyverno) pour lire ghcr.io tant que les images sont privées.
+  registryCredentials: ""
