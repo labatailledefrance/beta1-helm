@@ -12,10 +12,13 @@ Une version du chart `game` épingle les deux images par digest : la monter, c'e
 ## Installer
 
 ```
-# 1. Kyverno (une fois par cluster). Son chart OCI n'est pas signé (constaté le
-#    2026-11-26, seules ses images portent des attestations) : on l'épingle par digest.
-helm install kyverno oci://ghcr.io/kyverno/charts/kyverno@sha256:83054f30148c3cfc001087c1f5772eda7c7224e9b74b7f0e70c39c9cafe009d1 \
-  -n kyverno --create-namespace   # 3.9.2, Kyverno v1.19.2
+# 1. Kyverno (une fois par cluster), chart durci de dhi.io (Kyverno v1.19.2), par
+#    digest. Ses images viennent de dhi.io : secret de tirage dans le namespace.
+kubectl create namespace kyverno
+kubectl -n kyverno create secret docker-registry dhi --docker-server=dhi.io \
+  --docker-username=… --docker-password=…
+helm install kyverno oci://dhi.io/kyverno-chart@sha256:30fed4df0eea007811ed0c46176b37a8098cb745038f3a801002d483e72d9cc7 \
+  -n kyverno --set 'global.imagePullSecrets[0].name=dhi'   # 3.9.2
 
 # 2. Nos charts : vérifier la signature, puis installer par version.
 ID='^https://github\.com/labatailledefrance/\.github/\.github/workflows/chart\.yml@.+$'
