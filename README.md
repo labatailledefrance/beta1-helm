@@ -10,7 +10,7 @@ Une version du chart `game` épingle les deux images par digest : la monter, c'e
 
 ## Installer
 
-Le cluster n'a pas de contrôle d'admission : la signature du chart et des images se vérifie **avant** l'installation.
+Le cluster n'a pas de contrôle d'admission : la signature du chart et des images se vérifie **avant** l'installation, avec **cosign ≥ 3** ([releases](https://github.com/sigstore/cosign/releases)) : celui des distributions (2.x) ne lit pas les signatures en bundle OCI que produit la CI.
 
 ```
 ISSUER=https://token.actions.githubusercontent.com
@@ -28,7 +28,9 @@ helm install game oci://ghcr.io/labatailledefrance/charts/game --version 0.1.0 \
   --set server.image.digest=$SERVER --set client.image.digest=$CLIENT
 ```
 
-Tant que les dépôts sont privés, les charts et les images le sont aussi sur ghcr.io : `helm registry login ghcr.io` et `cosign login ghcr.io` avec un jeton qui a `read:packages`, et un secret de tirage dans le cluster (`imagePullSecret`).
+Pour une mise à jour, `helm upgrade` avec les mêmes options ; sur srv, `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`. Elle remet le monde à zéro.
+
+Chart et images sont publics sur ghcr.io : ni connexion ni secret de tirage.
 
 ## Vérifier en local
 
