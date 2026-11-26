@@ -12,11 +12,10 @@ Une version du chart `game` épingle les deux images par digest : la monter, c'e
 ## Installer
 
 ```
-# 1. Kyverno (une fois par cluster), chart OCI officiel signé.
-cosign verify ghcr.io/kyverno/charts/kyverno:3.9.2 \
-  --certificate-identity-regexp '^https://github\.com/kyverno/kyverno/' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
-helm install kyverno oci://ghcr.io/kyverno/charts/kyverno --version 3.9.2 -n kyverno --create-namespace
+# 1. Kyverno (une fois par cluster). Son chart OCI n'est pas signé (constaté le
+#    2026-11-26, seules ses images portent des attestations) : on l'épingle par digest.
+helm install kyverno oci://ghcr.io/kyverno/charts/kyverno@sha256:83054f30148c3cfc001087c1f5772eda7c7224e9b74b7f0e70c39c9cafe009d1 \
+  -n kyverno --create-namespace   # 3.9.2, Kyverno v1.19.2
 
 # 2. Nos charts : vérifier la signature, puis installer par version.
 ID='^https://github\.com/labatailledefrance/\.github/\.github/workflows/chart\.yml@.+$'
@@ -29,6 +28,8 @@ helm install game oci://ghcr.io/labatailledefrance/charts/game --version 0.1.0 \
   -n labatailledefrance --create-namespace \
   --set server.image.digest=sha256:… --set client.image.digest=sha256:…
 ```
+
+Tant que les dépôts sont privés, les charts et les images le sont aussi sur ghcr.io : `helm registry login ghcr.io` et `cosign login ghcr.io` avec un jeton qui a `read:packages`, et un secret de tirage dans le cluster (`imagePullSecret`, `images.registryCredentials`).
 
 ## Vérifier en local
 
