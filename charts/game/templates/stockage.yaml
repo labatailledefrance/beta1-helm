@@ -1,0 +1,22 @@
+# Volumes des données (H-06), gardés à la désinstallation : régénérer les tiles
+# ne retélécharge pas les sources. Avec stockage.noeud, local-path les crée dès
+# l'installation (sinon au premier pod qui les monte).
+{{- $v := .Values.stockage }}
+{{- range $nom, $taille := dict "sources" $v.sources "tiles" $v.tiles "assets" $v.assets }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $nom }}
+  labels:
+    {{- include "game.labels" $ | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+    {{- with $v.noeud }}
+    volume.kubernetes.io/selected-node: {{ . }}
+    {{- end }}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ $v.storageClass }}
+  resources: { requests: { storage: {{ $taille }} } }
+{{- end }}

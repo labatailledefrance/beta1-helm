@@ -24,6 +24,56 @@ client:
     requests: { cpu: 50m, memory: 64Mi }
     limits: { cpu: "1", memory: 256Mi }
 
+# Données du jeu (H-06) : chaque publication est adressée par ses entrées
+# (digest de l'image, zones) ; un Job la produit dans une PVC, le serveur de
+# données la sert en lecture seule. Le Job ne refait rien si elle existe.
+datachain:
+  image:
+    repository: ghcr.io/labatailledefrance/beta1-datachain
+    digest: ""
+  # Départements (D029, D974…) ou FRANCE ; vide = France entière.
+  zones: []
+  processus: 2
+  threads: 8
+  # Vrai : Job créé à l'arrêt (spec.suspend), par exemple pour copier les
+  # sources de P-26 dans la PVC avant le premier téléchargement.
+  suspendu: false
+  resources:
+    requests: { cpu: "4", memory: 8Gi }
+    limits: { cpu: "16", memory: 48Gi }
+
+assets:
+  image:
+    repository: ghcr.io/labatailledefrance/beta1-assets
+    digest: ""
+  # Secret (clé « token ») du jeton personnel Sketchfab, créé à la main :
+  #   kubectl -n labatailledefrance create secret generic sketchfab --from-literal=token=…
+  # Vide : pas de jeton (les modèles Sketchfab doivent alors être copiés).
+  sketchfabSecret: ""
+  suspendu: false
+  resources:
+    requests: { cpu: "1", memory: 1Gi }
+    limits: { cpu: "4", memory: 4Gi }
+
+# Serveur de données : nginx (image du client, configuration à part) qui sert
+# /tiles/<id>/ et /assets/<id>/ en immuable, et /publications.json.
+donnees:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: "4", memory: 1Gi }
+
+# PVC gardées à la désinstallation (helm.sh/resource-policy: keep).
+stockage:
+  storageClass: local-path
+  # Nœud où créer les PVC dès l'installation (annotation
+  # volume.kubernetes.io/selected-node) ; vide : au premier pod qui les monte
+  # (local-path est en WaitForFirstConsumer).
+  noeud: ""
+  sources: 800Gi
+  tiles: 200Gi
+  assets: 5Gi
+
 # Secret dockerconfigjson pour ghcr.io, tant que les images sont privées.
 imagePullSecret: ""
 
@@ -37,3 +87,7 @@ traefik:
     average: 50
     burst: 100
     inFlight: 10
+  # Données (tiles, assets) : 585 tiles pour une vue de La Réunion (H-06).
+  rateLimitDonnees:
+    average: 200
+    burst: 1000

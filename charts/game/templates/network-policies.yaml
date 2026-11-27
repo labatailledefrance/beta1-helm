@@ -1,5 +1,5 @@
 # Tout est fermé par défaut, entrées comme sorties ; seul Traefik joint les
-# pods. (Une NetworkPolicy ne filtre pas le nœud lui-même, P-26.)
+# pods ; seuls les Jobs de données sortent (DNS, puis 443 vers Internet). (Une NetworkPolicy ne filtre pas le nœud lui-même, P-26.)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -27,3 +27,32 @@ spec:
       ports:
         - { port: 7425 }
         - { port: 8080 }
+---
+# Jobs de données : DNS du cluster, puis HTTPS vers Internet seulement (IGN,
+# INSEE, hôtes des assets) ; ni le cluster ni les réseaux privés.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-jobs-egress
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [datachain, assets] }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16, 127.0.0.0/8]
+      ports:
+        - { port: 443, protocol: TCP }

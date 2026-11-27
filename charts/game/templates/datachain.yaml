@@ -1,0 +1,60 @@
+# Chaîne de données (H-06) : sources (PVC « sources ») → publication de tiles
+# (PVC « tiles »), adressée par ses entrées. Pas un hook Helm : la première
+# génération dure des heures. Relancé à chaque installation ou mise à jour, il
+# sort aussitôt si la publication est complète ; tué, il reprend où il en était.
+{{- $id := include "game.publication.tiles" . }}
+{{- $spec := include "game.job.datachain" (dict "racine" . "id" $id) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Nom dérivé de toute la spec (le gabarit d'un Job est immuable).
+  name: datachain-{{ $spec | sha256sum | trunc 16 }}
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+    app.kubernetes.io/name: datachain
+    labatailledefrance.fr/publication: {{ $id }}
+spec:
+  suspend: {{ .Values.datachain.suspendu }}
+  {{- $spec | nindent 2 }}
+{{- define "game.job.datachain" -}}
+{{- $r := .racine -}}
+backoffLimit: 20
+ttlSecondsAfterFinished: 604800
+template:
+  metadata:
+    labels:
+      {{- include "game.labels" $r | nindent 6 }}
+      app.kubernetes.io/name: datachain
+  spec:
+    {{- include "game.podSecurity" $r | nindent 4 }}
+    restartPolicy: Never
+    containers:
+      - name: datachain
+        image: {{ include "game.image" $r.Values.datachain }}
+        args:
+          - --sources
+          - /donnees/sources
+          - --tiles
+          - /donnees/tiles
+          - --publication
+          - {{ .id | quote }}
+          - --processus
+          - {{ $r.Values.datachain.processus | quote }}
+          - --threads
+          - {{ $r.Values.datachain.threads | quote }}
+          {{- with $r.Values.datachain.zones }}
+          - --zones
+          - {{ join "," . | quote }}
+          {{- end }}
+        {{- include "game.containerSecurity" $r | nindent 8 }}
+        resources:
+          {{- toYaml $r.Values.datachain.resources | nindent 10 }}
+        volumeMounts:
+          - { name: sources, mountPath: /donnees/sources }
+          - { name: tiles, mountPath: /donnees/tiles }
+          - { name: tmp, mountPath: /tmp }
+    volumes:
+      - { name: sources, persistentVolumeClaim: { claimName: sources } }
+      - { name: tiles, persistentVolumeClaim: { claimName: tiles } }
+      - { name: tmp, emptyDir: { sizeLimit: 10Gi } }
+{{- end -}}
