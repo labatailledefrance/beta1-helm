@@ -1,0 +1,108 @@
+# Serveur de données (H-06) : nginx, sur l'image du client (configuration à
+# part), qui sert en lecture seule la publication de tiles et celle des
+# assets. L'identifiant est dans l'URL : contenu immuable, mis en cache sans
+# expiration. /publications.json donne les identifiants courants au client.
+{{- $tiles := include "game.publication.tiles" . }}
+{{- $assets := include "game.publication.assets" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: donnees-nginx
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+data:
+  default.conf: |
+    server {
+        listen 8080;
+        server_tokens off;
+        autoindex off;
+        sendfile on;
+        tcp_nopush on;
+
+        # Tout add_header d'un location annule ceux du niveau au-dessus :
+        # les en-têtes sont donc répétés dans chaque location.
+        location /tiles/{{ $tiles }}/ {
+            alias /donnees/tiles/{{ $tiles }}/;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            add_header Cross-Origin-Resource-Policy "same-origin" always;
+            add_header X-Content-Type-Options "nosniff" always;
+        }
+        location /assets/{{ $assets }}/ {
+            alias /donnees/assets/publications/{{ $assets }}/;
+            gzip on;
+            gzip_types audio/wav application/octet-stream model/gltf-binary;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            add_header Cross-Origin-Resource-Policy "same-origin" always;
+            add_header X-Content-Type-Options "nosniff" always;
+        }
+        location = /publications.json {
+            default_type application/json;
+            add_header Cache-Control "no-cache" always;
+            add_header Cross-Origin-Resource-Policy "same-origin" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            return 200 '{"tiles":"/tiles/{{ $tiles }}/","assets":"/assets/{{ $assets }}/"}';
+        }
+        location / {
+            return 404;
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: donnees
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+    app.kubernetes.io/name: donnees
+spec:
+  replicas: {{ .Values.donnees.replicas }}
+  selector:
+    matchLabels: { app.kubernetes.io/name: donnees, app.kubernetes.io/instance: {{ .Release.Name }} }
+  template:
+    metadata:
+      labels:
+        {{- include "game.labels" . | nindent 8 }}
+        app.kubernetes.io/name: donnees
+      annotations:
+        checksum/config: {{ printf "%s|%s" $tiles $assets | sha256sum | trunc 16 }}
+    spec:
+      {{- include "game.podSecurity" . | nindent 6 }}
+      # Publications complètes avant de servir quoi que ce soit.
+      initContainers:
+        {{- include "game.attendre" (dict "racine" . "nom" "tiles" "volume" "tiles" "point" "/donnees/tiles" "fichier" (printf "/donnees/tiles/%s/COMPLET" $tiles)) | nindent 8 }}
+        {{- include "game.attendre" (dict "racine" . "nom" "assets" "volume" "assets" "point" "/donnees/assets" "fichier" (printf "/donnees/assets/publications/%s/COMPLET" $assets)) | nindent 8 }}
+      containers:
+        - name: nginx
+          image: {{ include "game.image" .Values.client }}
+          ports:
+            - { name: http, containerPort: 8080 }
+          {{- include "game.containerSecurity" . | nindent 10 }}
+          resources:
+            {{- toYaml .Values.donnees.resources | nindent 12 }}
+          readinessProbe: { httpGet: { path: /publications.json, port: http }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /publications.json, port: http }, periodSeconds: 20 }
+          volumeMounts:
+            - { name: config, mountPath: /etc/nginx/conf.d, readOnly: true }
+            - { name: tiles, mountPath: /donnees/tiles, readOnly: true }
+            - { name: assets, mountPath: /donnees/assets, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+            - { name: cache, mountPath: /var/cache/nginx }
+            - { name: pid, mountPath: /run/nginx }
+      volumes:
+        - { name: config, configMap: { name: donnees-nginx } }
+        - { name: tiles, persistentVolumeClaim: { claimName: tiles, readOnly: true } }
+        - { name: assets, persistentVolumeClaim: { claimName: assets, readOnly: true } }
+        - { name: tmp, emptyDir: { sizeLimit: 64Mi } }
+        - { name: cache, emptyDir: { sizeLimit: 256Mi } }
+        - { name: pid, emptyDir: { medium: Memory, sizeLimit: 1Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: donnees
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: donnees, app.kubernetes.io/instance: {{ .Release.Name }} }
+  ports:
+    - { name: http, port: 8080, targetPort: http }

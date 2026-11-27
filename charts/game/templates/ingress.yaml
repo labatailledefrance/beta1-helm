@@ -1,5 +1,6 @@
 # Ingress Traefik : TLS (Let's Encrypt), limites par adresse IP, en-têtes.
-# /ws va au serveur (WebSocket), le reste au client.
+# /ws va au serveur (WebSocket), /tiles/, /assets/ et /publications.json au
+# serveur de données, le reste au client.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -10,6 +11,19 @@ spec:
   rateLimit:
     average: {{ .Values.traefik.rateLimit.average }}
     burst: {{ .Values.traefik.rateLimit.burst }}
+---
+# Données : rafales de lectures parallèles (une vue complète demande des
+# centaines de tiles, H-06), limite propre.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit-donnees
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+spec:
+  rateLimit:
+    average: {{ .Values.traefik.rateLimitDonnees.average }}
+    burst: {{ .Values.traefik.rateLimitDonnees.burst }}
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
@@ -54,6 +68,13 @@ spec:
         - { name: in-flight-limit }
       services:
         - { name: server, port: ws }
+    - match: Host(`{{ .Values.host }}`) && (PathPrefix(`/tiles/`) || PathPrefix(`/assets/`) || Path(`/publications.json`))
+      kind: Rule
+      middlewares:
+        - { name: rate-limit-donnees }
+        - { name: security-headers }
+      services:
+        - { name: donnees, port: http }
     - match: Host(`{{ .Values.host }}`)
       kind: Rule
       middlewares:

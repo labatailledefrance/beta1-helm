@@ -1,0 +1,57 @@
+# Assets du jeu : téléchargement puis conversion (Blender) dans la PVC
+# « assets », publication adressée par le digest de l'image. Même principe que
+# la chaîne de données : sort aussitôt si la publication est complète.
+# Poly Pizza refuse les IP de datacenter : les modèles Quaternius se copient
+# sous sources/ avant (README).
+{{- $id := include "game.publication.assets" . }}
+{{- $spec := include "game.job.assets" (dict "racine" . "id" $id) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: assets-{{ $spec | sha256sum | trunc 16 }}
+  labels:
+    {{- include "game.labels" . | nindent 4 }}
+    app.kubernetes.io/name: assets
+    labatailledefrance.fr/publication: {{ $id }}
+spec:
+  suspend: {{ .Values.assets.suspendu }}
+  {{- $spec | nindent 2 }}
+{{- define "game.job.assets" -}}
+{{- $r := .racine -}}
+backoffLimit: 6
+ttlSecondsAfterFinished: 604800
+template:
+  metadata:
+    labels:
+      {{- include "game.labels" $r | nindent 6 }}
+      app.kubernetes.io/name: assets
+  spec:
+    {{- include "game.podSecurity" $r | nindent 4 }}
+    restartPolicy: Never
+    containers:
+      - name: assets
+        image: {{ include "game.image" $r.Values.assets }}
+        args:
+          - publier
+          - --sources
+          - /donnees/sources
+          - --sortie
+          - /donnees/publications
+          - --publication
+          - {{ .id | quote }}
+        {{- with $r.Values.assets.sketchfabSecret }}
+        env:
+          - name: SKETCHFAB_TOKEN
+            valueFrom: { secretKeyRef: { name: {{ . }}, key: token } }
+        {{- end }}
+        {{- include "game.containerSecurity" $r | nindent 8 }}
+        resources:
+          {{- toYaml $r.Values.assets.resources | nindent 10 }}
+        volumeMounts:
+          - { name: assets, mountPath: /donnees }
+          # HOME de Blender.
+          - { name: tmp, mountPath: /tmp }
+    volumes:
+      - { name: assets, persistentVolumeClaim: { claimName: assets } }
+      - { name: tmp, emptyDir: { sizeLimit: 2Gi } }
+{{- end -}}

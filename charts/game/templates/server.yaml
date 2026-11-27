@@ -19,6 +19,10 @@ spec:
     spec:
       {{- include "game.podSecurity" . | nindent 6 }}
       terminationGracePeriodSeconds: 30
+      # Le serveur lit les tiles (H-06) : il attend une publication complète.
+      {{- $tiles := include "game.publication.tiles" . }}
+      initContainers:
+        {{- include "game.attendre" (dict "racine" . "nom" "tiles" "volume" "tiles" "point" "/tiles" "fichier" (printf "/tiles/%s/COMPLET" $tiles)) | nindent 8 }}
       containers:
         - name: server
           image: {{ include "game.image" .Values.server }}
@@ -31,8 +35,14 @@ spec:
           startupProbe: { tcpSocket: { port: ws }, periodSeconds: 5, failureThreshold: 120 }
           readinessProbe: { tcpSocket: { port: ws }, periodSeconds: 10 }
           livenessProbe: { tcpSocket: { port: ws }, periodSeconds: 20 }
+          env:
+            # Publication de tiles à lire (sous /tiles).
+            - { name: TILES, value: {{ printf "/tiles/%s" $tiles | quote }} }
           volumeMounts:
             - { name: state, mountPath: /state }
+            - { name: tiles, mountPath: /tiles, readOnly: true }
+      volumes:
+        - { name: tiles, persistentVolumeClaim: { claimName: tiles, readOnly: true } }
   volumeClaimTemplates:
     - metadata: { name: state }
       spec:
