@@ -2,10 +2,10 @@ apiVersion: v2
 name: game
 description: La Bataille de France, beta 1 — serveur de simulation, client, données (tiles, assets) et ingress d'un monde.
 type: application
-version: 0.2.0
+version: 0.3.0
 # Une version du chart épingle les images par digest : la monter, c'est
 # remettre le monde à zéro (H-01, H-07).
-appVersion: "0.2.0"
+appVersion: "0.3.0"
 home: https://labatailledefrance.fr
 sources:
   - https://github.com/labatailledefrance/beta1-helm
