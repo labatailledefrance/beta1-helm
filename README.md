@@ -31,7 +31,7 @@ Le cluster n'a pas de contrôle d'admission : la signature du chart et des image
 ISSUER=https://token.actions.githubusercontent.com
 CHART_ID='^https://github\.com/labatailledefrance/\.github/\.github/workflows/chart\.yml@.+$'
 IMAGE_ID='^https://github\.com/labatailledefrance/\.github/\.github/workflows/image\.yml@.+$'
-VERSION=0.2.0
+VERSION=0.3.0
 SERVER=sha256:…      # digests publiés par la CI de chaque dépôt
 CLIENT=sha256:…
 DATACHAIN=sha256:…
